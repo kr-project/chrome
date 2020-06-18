@@ -3,7 +3,7 @@ const child = require('child_process');
 const util = require('util');
 const debug = require('debug')('browserless-docker-deploy');
 const exec = util.promisify(child.exec);
-const { map, noop } = require('lodash');
+const { map, noop, min } = require('lodash');
 const path = require('path');
 const fs = require('fs-extra');
 
@@ -13,7 +13,10 @@ const {
   version,
 } = require('../package.json');
 
-const REPO = 'browserless/chrome';
+const REPO = process.env.REPO || 'browserless/chrome';
+const TAG_NAME = process.env.TAG_NAME;
+const BASE_IMAGE = process.env.BASE_IMAGE;
+const USER = process.env.USER || 'blessuser';
 
 const logExec = (cmd) => {
   debug(`  "${cmd}"`);
@@ -55,36 +58,49 @@ const deployVersion = async (tags, pptrVersion) => {
   const versionJson = fs.readJSONSync(path.join(__dirname, '..', 'version.json'));
   const chromeStableArg = isChromeStable ? 'true' : 'false';
 
+  let dockerTags = [];
+  if (TAG_NAME) {
+    dockerTags.push(`${REPO}/${TAG_NAME}`)
+  } else {
+    [patchBranch, minorBranch, majorBranch].forEach(tag => dockerTags.push(`${REPO}/${tag}`));
+  }
+
   // docker build
   await logExec(`docker build \
   --quiet \
   --build-arg "PUPPETEER_CHROMIUM_REVISION=${puppeteerChromiumRevision}" \
   --build-arg "USE_CHROME_STABLE=${chromeStableArg}" \
   --build-arg "PUPPETEER_VERSION=${puppeteerVersion}" \
+  --build-arg "BASE_IMAGE=${BASE_IMAGE}" \
+  --build-arg "USER=${USER}" \
   --label "browser=${versionJson.Browser}" \
   --label "protocolVersion=${versionJson['Protocol-Version']}" \
   --label "v8Version=${versionJson['V8-Version']}" \
   --label "webkitVersion=${versionJson['WebKit-Version']}" \
   --label "debuggerVersion=${versionJson['Debugger-Version']}" \
   --label "puppeteerVersion=${versionJson['Puppeteer-Version']}" \
-  -t ${REPO}:${patchBranch} \
-  -t ${REPO}:${minorBranch} \
-  -t ${REPO}:${majorBranch} .`);
+  ${dockerTags.map(tag => `-t ${tag}`).join(' ')} \
+  .`);
 
-  // docker push
-  await Promise.all([
-    logExec(`docker push ${REPO}:${patchBranch}`),
-    logExec(`docker push ${REPO}:${minorBranch}`),
-    logExec(`docker push ${REPO}:${majorBranch}`),
-  ]);
+  if (TAG_NAME) {
+    // await logExec(`docker push ${REPO}:${TAG_NAME}`)
+  } else {
+    // docker push
+    await Promise.all([
+      logExec(`docker push ${REPO}:${patchBranch}`),
+      logExec(`docker push ${REPO}:${minorBranch}`),
+      logExec(`docker push ${REPO}:${majorBranch}`),
+    ]);
 
-  await logExec(`git add --force version.json hosts.json hints.json protocol.json`).catch(noop);
-  await logExec(`git commit --quiet -m "DEPLOY.js committing files for tag ${patchBranch}"`).catch(noop);
-  await logExec(`git tag --force ${patchBranch}`);
-  await logExec(`git push origin ${patchBranch} --force --quiet --no-verify &> /dev/null`).catch(noop);
+    await logExec(`git add --force version.json hosts.json hints.json protocol.json`).catch(noop);
+    await logExec(`git commit --quiet -m "DEPLOY.js committing files for tag ${patchBranch}"`).catch(noop);
+    await logExec(`git tag --force ${patchBranch}`);
+    await logExec(`git push origin ${patchBranch} --force --quiet --no-verify &> /dev/null`).catch(noop);  
+    
+    // git reset for next update
+    await cleanup();
+  }
 
-  // git reset for next update
-  await cleanup();
 }
 
 async function deploy () {
@@ -104,7 +120,11 @@ async function deploy () {
   await versions.reduce(
     (lastJob, { tags, pptrVersion }) =>
       lastJob
-        .then(() => deployVersion(tags, pptrVersion))
+        .then(() => {
+          if (!process.env.SINGLE_VERSION || process.env.SINGLE_VERSION === pptrVersion) {
+            return deployVersion(tags, pptrVersion);
+          }
+        })
         .catch((error) => {
           console.log(`Error in build (${version}): `, error);
           process.exit(1);
@@ -112,7 +132,7 @@ async function deploy () {
     Promise.resolve()
   );
 
-  await logExec(`docker images -a | grep "${REPO}" | awk '{print $3}' | xargs docker rmi -f`);
+  // await logExec(`docker images -a | grep "${REPO}" | awk '{print $3}' | xargs docker rmi -f`);
   debug(`Complete! Cleaning up file-system and exiting.`);
 }
 
