@@ -24,8 +24,7 @@
     "symlink-chrome": "node ./scripts/symlink-chrome",
     "external": "rimraf debugger/devtools && node ./scripts/install-external-deps.js",
     "post-install": "npm run external && npm run symlink-chrome && npm run meta",
-    "snyk-protect": "snyk protect",
-    "prepare": "npm run snyk-protect"
+    "snyk-protect": "snyk protect"
   },
   "puppeteerVersions": {
     "puppeteer-1.20.0": {
@@ -99,7 +98,7 @@
     "node-fetch": "^2.2.0",
     "node-pdftk": "^2.0.0",
     "prom-client": "^11.5.3",
-    "puppeteer": "^3.1.0",
+    "puppeteer": "3.1.0",
     "queue": "^6.0.0",
     "request": "^2.83.0",
     "rimraf": "^3.0.0",
@@ -129,5 +128,5 @@
     },
     "testRegex": "(/__tests__/.*|(\\.|/)(test|spec))\\.tsx?$"
   },
-  "snyk": true
+  "snyk": false
 }
