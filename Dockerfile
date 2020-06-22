@@ -65,7 +65,8 @@ RUN apt-get -qq update && apt-get -y -qq --no-install-recommends install \
   libxrender1 \
   libxss1 \
   libxtst6 \
-  xdg-utils && \
+  xdg-utils \
+  procps && \
   fc-cache -f -v
 
 # Install Chrome Stable when specified
