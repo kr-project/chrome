@@ -34,6 +34,7 @@ COPY . .
 RUN apt-get -qq update && apt-get -y -qq --no-install-recommends install \
   wget \
   fonts-liberation \
+  fonts-noto-color-emoji \
   libappindicator3-1 \
   libasound2 \
   libatk-bridge2.0-0 \
